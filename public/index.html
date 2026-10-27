@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leitura Hermenêutica</title>
+<style>
+:root{--cream:#F7EFE3;--card:#FBF6EE;--terra:#C97B5A;--caramel:#B9834F;--brown:#6B4A34;--burnt:#D9824B;--peach:#F2C4A8;--sand:#E8D9C4;--serif:Georgia,"Times New Roman",serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--brown);font-family:system-ui,sans-serif;min-height:100vh}
+header{background:linear-gradient(160deg,#F6D9A8 0%,#F2C4A8 55%,#F7EFE3 100%);padding:20px}
+header h1{font-family:var(--serif);font-weight:normal;margin:0;font-size:28px}
+header p{margin:4px 0 0;font-family:var(--serif);font-style:italic;color:#7d5a42}
+main{max-width:900px;margin:0 auto;padding:24px 16px 64px}
+.card{background:var(--card);border:1px solid #efe2cf;border-radius:20px;box-shadow:0 2px 10px rgba(107,74,52,.08);padding:24px;margin-bottom:16px;animation:in .35s ease}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:14px;margin-bottom:12px}
+input,textarea{font:inherit;font-weight:normal;background:#fffdf9;border:1px solid #e2cfb6;border-radius:12px;padding:10px 12px;color:var(--brown)}
+textarea{font-family:var(--serif);font-size:16px;line-height:1.6;min-height:110px;resize:vertical}
+input:focus,textarea:focus{outline:2px solid var(--burnt);outline-offset:1px;border-color:transparent}
+button{font:inherit;font-weight:600;border-radius:999px;padding:10px 20px;cursor:pointer;border:1px solid #dcc4a6;background:#fffaf3;color:var(--brown)}
+button.main{background:var(--terra);border-color:var(--terra);color:#fff}
+button:disabled{opacity:.5;cursor:wait}
+.list button.item{display:block;width:100%;text-align:left;border-radius:14px;margin-top:8px;padding:14px 16px;background:#fffaf3}
+.path{font-size:13px;color:#86634a}
+.msg{padding:14px 16px;border-radius:14px;margin:10px 0;line-height:1.6;white-space:pre-wrap}
+.msg.ia{background:#fdf1e6;font-family:var(--serif)}
+.msg.eu{background:#f6eadb;margin-left:40px}
+.trecho{font-family:var(--serif);font-style:italic;border-left:3px solid var(--peach);padding-left:14px;white-space:pre-wrap;color:#5b3e2b}
+.err{color:#9a4f2f;font-size:14px}
+.note{font-size:13px;color:#8d6c55}
+.fich h3{font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--caramel);margin:18px 0 6px}
+.fich p,.fich li{font-family:var(--serif);line-height:1.6}
+@media print{header,nav,.noprint{display:none!important}body{background:#fff}.card{box-shadow:none;border:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Leitura Hermenêutica</h1>
+  <p>Ler devagar, perguntar bem, compreender de novo.</p>
+</header>
+<main>
+  <div class="row noprint"><button onclick="showList()">Biblioteca</button> <button class="main" onclick="showNew()">Nova leitura</button></div>
+  <div id="view"></div>
+</main>
+
+<script>
+const view = document.getElementById('view');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.erro || 'Erro desconhecido');
+  return data;
+}
+
+async function showList() {
+  const list = await api('/api/readings');
+  view.innerHTML = `<div class="card"><h2 style="font-family:var(--serif);font-weight:normal">Biblioteca</h2>
+    ${list.length ? list.map(r => `<button class="item" onclick="openReading('${r.id}')">
+      <span class="path">${esc(r.tema || 'sem tema')}</span><br><b style="font-family:var(--serif);font-weight:normal;font-size:17px">${esc(r.obra)}</b><br>
+      <span class="note">${esc(r.autor)} · ${r.status === 'concluida' ? 'fichamento pronto' : 'em diálogo'} · ${new Date(r.createdAt).toLocaleDateString('pt-BR')}</span></button>`).join('')
+      : '<p class="note">Nenhuma leitura ainda.</p>'}
+    </div>`;
+}
+
+function showNew() {
+  view.innerHTML = `<div class="card"><h2 style="font-family:var(--serif);font-weight:normal">Nova leitura</h2>
+    <label>Obra<input id="obra" required></label>
+    <label>Autor<input id="autor" required></label>
+    <label>Capítulo ou parte<input id="cap"></label>
+    <label>Tema ou conceito estudado<input id="tema" placeholder="Psicologia → Desenvolvimento Humano"></label>
+    <label>Trecho do texto<textarea id="trecho" style="min-height:200px"></textarea></label>
+    <p class="err" id="err"></p>
+    <button class="main" id="go" onclick="startReading()">Começar diálogo</button></div>`;
+}
+
+async function startReading() {
+  const body = {
+    obra: obra.value.trim(), autor: autor.value.trim(), cap: cap.value.trim(),
+    tema: tema.value.trim(), trecho: trecho.value.trim()
+  };
+  if (!body.obra || !body.autor || !body.trecho) { err.textContent = 'Preencha obra, autor e trecho.'; return; }
+  go.disabled = true; go.textContent = 'A IA está lendo o trecho…';
+  try {
+    const r = await api('/api/readings', { method: 'POST', body: JSON.stringify(body) });
+    openReading(r.id, r);
+  } catch (e) { err.textContent = e.message; go.disabled = false; go.textContent = 'Começar diálogo'; }
+}
+
+async function openReading(id, preloaded = null) {
+  const r = preloaded || await api('/api/readings/' + id);
+  if (r.status === 'concluida') return showFichamento(r.id, r);
+  renderDialog(r);
+}
+
+function renderDialog(r) {
+  const thread = r.turns.map(t => `<div class="msg ${t.role === 'assistant' ? 'ia' : 'eu'}">${esc(t.content)}</div>`).join('');
+  view.innerHTML = `<div class="card">
+    <p class="path">${esc(r.obra)} — ${esc(r.autor)}${r.cap ? ' · ' + esc(r.cap) : ''}</p>
+    <details><summary class="note">Ver trecho original</summary><div class="trecho">${esc(r.trecho)}</div></details>
+    <div id="thread">${thread}</div>
+    <label style="margin-top:14px">Sua resposta<textarea id="resp" placeholder="Responda com as suas próprias palavras…"></textarea></label>
+    <p class="err" id="err"></p>
+    <div class="row" style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="main" id="send" onclick="sendAnswer('${r.id}')">Enviar resposta</button>
+      ${r.turns.length >= 2 ? `<button onclick="makeFich('${r.id}')">Gerar fichamento</button>` : ''}
+    </div></div>`;
+  document.getElementById('thread').lastElementChild?.scrollIntoView({behavior:'smooth'});
+}
+
+async function sendAnswer(id) {
+  const texto = document.getElementById('resp').value.trim();
+  if (!texto) { document.getElementById('err').textContent = 'Escreva sua resposta para seguirmos.'; return; }
+  const btn = document.getElementById('send');
+  btn.disabled = true; btn.textContent = 'A IA está analisando…';
+  try {
+    const r = await api(`/api/readings/${id}/answer`, { method: 'POST', body: JSON.stringify({ texto }) });
+    renderDialog(r);
+    if (r.compreensaoAdequada) {
+      document.querySelector('.card').insertAdjacentHTML('beforeend',
+        '<p class="note">A IA considera sua compreensão adequada. Você já pode gerar o fichamento.</p>');
+    }
+  } catch (e) {
+    document.getElementById('err').textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Enviar resposta';
+  }
+}
+
+async function makeFich(id) {
+  view.insertAdjacentHTML('beforeend', '<p class="note" id="wait">Gerando o fichamento a partir das suas respostas…</p>');
+  try {
+    const f = await api(`/api/readings/${id}/fichamento`, { method: 'POST' });
+    const r = await api('/api/readings/' + id);
+    showFichamento(id, { ...r, fichamento: f });
+  } catch (e) { document.getElementById('wait').textContent = e.message; }
+}
+
+function list(items) { return items?.length ? '<ul>' + items.map(i => `<li>${esc(typeof i === 'string' ? i : (i.conceito + ': ' + i.definicao))}</li>`).join('') + '</ul>' : '<p class="note">—</p>'; }
+
+function showFichamento(id, r) {
+  const f = r.fichamento;
+  view.innerHTML = `<div class="card fich">
+    <h2 style="font-family:var(--serif);font-weight:normal">📌 FICHAMENTO HERMENÊUTICO</h2>
+    <h3>Obra/Autor</h3><p>${esc(f.obra_autor)}</p>
+    <h3>Trecho analisado</h3><div class="trecho">${esc(f.trecho)}</div>
+    <h3>Tese central</h3><p>${esc(f.tese_central)}</p>
+    <h3>Minha interpretação refinada</h3><p>${esc(f.interpretacao_refinada)}</p>
+    <h3>Conceitos-chave</h3>${list(f.conceitos_chave)}
+    <h3>O que compreendi corretamente</h3>${list(f.compreendeu_corretamente)}
+    <h3>Correções conceituais feitas pela IA</h3>${list(f.correcoes)}
+    <h3>Nuances importantes</h3>${list(f.nuances)}
+    <h3>Pergunta para revisão</h3><p>${esc(f.pergunta_revisao)}</p>
+    <div class="noprint" style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="main" onclick="window.print()">Imprimir / Salvar em PDF</button>
+      <button onclick="showList()">Voltar à biblioteca</button></div></div>`;
+}
+
+showList();
+</script>
+</body>
+</html>
